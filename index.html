@@ -3,7 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Monitor de estabilidad para foro iFastNet - Sistema de monitoreo YODA">
+    <meta name="theme-color" content="#0b0f1a">
     <title>Monitor de Estabilidad | YODA</title>
+
+    <!-- Favicon inline SVG para evitar peticiones externas -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%2300d4a8'/%3E%3Ctext x='50' y='65' font-size='50' text-anchor='middle' fill='%230b0f1a' font-family='Arial'%3EY%3C/text%3E%3C/svg%3E">
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
     <style>
@@ -210,6 +216,8 @@
         /* Lista de items */
         .feed-list {
             list-style: none;
+            padding: 0;
+            margin: 0;
         }
 
         .feed-item {
@@ -316,11 +324,47 @@
             font-size: 0.68rem;
             color: var(--yoda-muted);
         }
+
+        /* Responsive */
+        @media (max-width: 576px) {
+            body { padding: 1rem 0.75rem; }
+            .monitor-heading { font-size: 1.3rem; }
+            .monitor-header { flex-direction: column; align-items: flex-start; }
+            .feed-item { grid-template-columns: 1fr; gap: 0.75rem; }
+            .btn-ver { align-self: flex-start; }
+        }
+
+        /* Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+
+        /* Skip link for accessibility */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: var(--yoda-accent);
+            color: var(--yoda-bg);
+            padding: 8px;
+            text-decoration: none;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            z-index: 100;
+            border-radius: 0 0 4px 0;
+        }
+        .skip-link:focus { top: 0; }
     </style>
 </head>
 <body>
 
-<div class="monitor-wrap">
+<a href="#main-content" class="skip-link">Saltar al contenido</a>
+
+<div class="monitor-wrap" role="main" id="main-content" aria-label="Monitor de estabilidad">
 
     <!-- Encabezado -->
     <div class="monitor-header">
@@ -328,21 +372,21 @@
             <div class="monitor-title">// sistema de monitoreo</div>
             <h1 class="monitor-heading">Foro <span>iFastNet</span></h1>
         </div>
-        <div id="statusPill" class="status-pill loading">
-            <span class="status-dot pulse"></span>
+        <div id="statusPill" class="status-pill loading" role="status" aria-live="polite" aria-atomic="true">
+            <span class="status-dot pulse" aria-hidden="true"></span>
             <span id="statusText">Consultando...</span>
         </div>
     </div>
 
     <!-- Card principal -->
-    <div class="monitor-card">
+    <div class="monitor-card" role="region" aria-label="Feed de reportes">
 
         <div class="monitor-card-header">
             <div class="source-label">
                 fuente: <strong>forum.infinityfree.com/posts.rss</strong>
             </div>
-            <button class="btn-refresh" id="btnRefresh" onclick="cargarFeed()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <button class="btn-refresh" id="btnRefresh" aria-label="Recargar feed">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M23 4v6h-6M1 20v-6h6"/>
                     <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
                 </svg>
@@ -350,99 +394,160 @@
             </button>
         </div>
 
-        <div id="feedBody">
+        <div id="feedBody" role="feed" aria-busy="true" aria-label="Lista de reportes">
             <div class="state-box">
-                <div class="spinner-mono"></div><br>
+                <div class="spinner-mono" aria-hidden="true"></div><br>
                 Consultando foro...
             </div>
         </div>
 
         <div class="monitor-card-footer">
             <span class="last-update" id="lastUpdate">—</span>
-            <span class="counter-label" id="itemCounter"></span>
+            <span class="counter-label" id="itemCounter" aria-live="polite"></span>
         </div>
 
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 <script>
-const RSS_URL   = "https://forum.infinityfree.com/posts.rss";
-const MAX_ITEMS = 5;
-const TIMEOUT   = 12000;
+// ============================================
+// CONFIGURACIÓN
+// ============================================
+const CONFIG = {
+    RSS_URL:   "https://forum.infinityfree.com/posts.rss",
+    MAX_ITEMS: 5,
+    TIMEOUT:   12000,
+    RETRY_DELAY: 1000
+};
 
-// Proxies en orden de preferencia — si uno falla, se intenta el siguiente
+// Proxies en orden de preferencia
 const PROXIES = [
     url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
     url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
     url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
 ];
 
-// Sanitiza un string para insertarlo como texto visible (evita XSS)
+// ============================================
+// UTILIDADES
+// ============================================
+
+/**
+ * Sanitiza un string para inserción segura como texto visible
+ * @param {string} str - Texto a sanitizar
+ * @returns {string} Texto escapado
+ */
 function sanitize(str) {
+    if (!str) return '';
     const div = document.createElement('div');
-    div.appendChild(document.createTextNode(str || ''));
+    div.textContent = str;
     return div.innerHTML;
 }
 
-// Formatea fecha legible
+/**
+ * Formatea una fecha a formato legible en español
+ * @param {string} dateStr - Fecha ISO o similar
+ * @returns {string} Fecha formateada
+ */
 function formatDate(dateStr) {
     if (!dateStr) return '';
     try {
-        return new Date(dateStr).toLocaleString('es-MX', {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+        return date.toLocaleString('es-MX', {
             day: '2-digit', month: 'short', year: 'numeric',
             hour: '2-digit', minute: '2-digit'
         });
-    } catch(e) { return dateStr; }
+    } catch(e) { 
+        return dateStr; 
+    }
 }
 
-// Establece el estado del indicador superior
+/**
+ * Establece el estado del indicador superior
+ * @param {string} state - 'loading' | 'ok' | 'error'
+ * @param {string} label - Texto descriptivo
+ */
 function setStatus(state, label) {
-    const pill = $('#statusPill');
-    pill.removeClass('loading ok error').addClass(state);
-    pill.find('.status-dot').toggleClass('pulse', state === 'loading');
-    $('#statusText').text(label);
+    const pill = document.getElementById('statusPill');
+    const dot  = pill.querySelector('.status-dot');
+    const text = document.getElementById('statusText');
+
+    pill.className = `status-pill ${state}`;
+    dot.classList.toggle('pulse', state === 'loading');
+    text.textContent = label;
 }
 
-// Activa / desactiva el botón de refresh
+/**
+ * Activa/desactiva el botón de refresh
+ * @param {boolean} loading - Estado de carga
+ */
 function setBtnState(loading) {
-    $('#btnRefresh').prop('disabled', loading).toggleClass('spinning', loading);
+    const btn = document.getElementById('btnRefresh');
+    btn.disabled = loading;
+    btn.classList.toggle('spinning', loading);
+    btn.setAttribute('aria-busy', loading ? 'true' : 'false');
 }
 
-// Actualiza el spinner con el proxy que se está intentando
+/**
+ * Muestra mensaje de carga con proxy actual
+ * @param {number} index - Índice del proxy
+ */
 function setLoadingMsg(index) {
-    $('#feedBody').html(`
+    const feedBody = document.getElementById('feedBody');
+    feedBody.innerHTML = `
         <div class="state-box">
-            <div class="spinner-mono"></div><br>
+            <div class="spinner-mono" aria-hidden="true"></div><br>
             Intentando proxy ${index + 1} de ${PROXIES.length}...
-        </div>`);
+        </div>`;
+    feedBody.setAttribute('aria-busy', 'true');
 }
 
-// Parsea el XML del RSS y devuelve el HTML de la lista
-function parsearRSS(xmlStr) {
-    const xml   = $.parseXML(xmlStr);
-    const $xml  = $(xml);
-    const items = $xml.find('item');
+// ============================================
+// PARSEO RSS
+// ============================================
 
+/**
+ * Parsea XML RSS y genera HTML de la lista
+ * @param {string} xmlStr - String XML del RSS
+ * @returns {Object|null} { html, count, total } o null si no hay items
+ */
+function parsearRSS(xmlStr) {
+    const parser = new DOMParser();
+    const xmlDoc = parser.parseFromString(xmlStr, "text/xml");
+
+    // Verificar errores de parseo
+    const parseError = xmlDoc.querySelector("parsererror");
+    if (parseError) {
+        console.warn("Error parseando XML:", parseError.textContent);
+        return null;
+    }
+
+    const items = xmlDoc.querySelectorAll('item');
     if (items.length === 0) return null;
 
     let html  = '<ul class="feed-list">';
     let count = 0;
 
-    items.slice(0, MAX_ITEMS).each(function() {
-        const titulo = $(this).find('title').text() || 'Sin título';
+    items.forEach((item, idx) => {
+        if (idx >= CONFIG.MAX_ITEMS) return;
 
-        // <link> en RSS 2.0 es nodo de texto adyacente — jQuery no lo lee con .text()
+        const titulo = item.querySelector('title')?.textContent?.trim() || 'Sin título';
+
+        // Extraer link: RSS 2.0 usa nodo de texto adyacente
         let link = '';
-        const linkNode = $(this).find('link');
-        if (linkNode.length) {
-            const next = linkNode[0].nextSibling;
-            if (next && next.nodeType === 3) link = next.nodeValue.trim();
-            if (!link) link = linkNode.attr('href') || '';
-            if (!link) link = linkNode.text().trim();
+        const linkNode = item.querySelector('link');
+        if (linkNode) {
+            // Intentar href (Atom)
+            link = linkNode.getAttribute('href') || '';
+            // Intentar texto del nodo
+            if (!link) link = linkNode.textContent?.trim() || '';
+            // Intentar nextSibling (RSS 2.0)
+            if (!link && linkNode.nextSibling?.nodeType === 3) {
+                link = linkNode.nextSibling.nodeValue?.trim() || '';
+            }
         }
 
-        const fecha  = $(this).find('pubDate').text();
+        const fecha = item.querySelector('pubDate')?.textContent || '';
         const safe_t = sanitize(titulo);
         const safe_l = sanitize(link);
 
@@ -454,7 +559,7 @@ function parsearRSS(xmlStr) {
             </div>
             ${safe_l ? `<a href="${safe_l}" target="_blank" rel="noopener noreferrer" class="btn-ver">
                 Ver
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
                     <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
                     <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
                 </svg>
@@ -467,89 +572,69 @@ function parsearRSS(xmlStr) {
     return { html, count, total: items.length };
 }
 
-// Intenta cada proxy en secuencia; resuelve con los datos o rechaza si todos fallan
-function intentarProxies(proxyIndex) {
+// ============================================
+// FETCH CON PROXIES (Vanilla JS)
+// ============================================
+
+/**
+ * Realiza fetch con timeout
+ * @param {string} url - URL a fetch
+ * @param {number} timeout - Tiempo máximo en ms
+ * @returns {Promise<Response>}
+ */
+function fetchWithTimeout(url, timeout = CONFIG.TIMEOUT) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeout);
+
+    return fetch(url, { signal: controller.signal })
+        .finally(() => clearTimeout(id));
+}
+
+/**
+ * Intenta cada proxy en secuencia
+ * @param {number} proxyIndex - Índice del proxy a intentar
+ * @returns {Promise<Object>} Resultado del parseo
+ */
+async function intentarProxies(proxyIndex = 0) {
     if (proxyIndex >= PROXIES.length) {
-        return $.Deferred().reject('all_failed').promise();
+        throw new Error('all_failed');
     }
 
     setLoadingMsg(proxyIndex);
     setStatus('loading', `Proxy ${proxyIndex + 1}/${PROXIES.length}...`);
 
-    const rssConCache = RSS_URL + '?_=' + Date.now();
-    const proxyUrl    = PROXIES[proxyIndex](rssConCache);
+    const rssConCache = CONFIG.RSS_URL + '?_=' + Date.now();
+    const proxyUrl = PROXIES[proxyIndex](rssConCache);
 
-    // Cada proxy devuelve el contenido de forma diferente
-    const deferred = $.Deferred();
+    try {
+        const response = await fetchWithTimeout(proxyUrl);
 
-    $.ajax({ url: proxyUrl, dataType: 'text', timeout: TIMEOUT })
-        .done(function(raw) {
-            try {
-                // allorigins y algunos otros devuelven JSON con .contents
-                let xmlStr = raw;
-                try {
-                    const json = JSON.parse(raw);
-                    if (json && json.contents) xmlStr = json.contents;
-                } catch(e) { /* ya es XML directo */ }
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
 
-                if (!xmlStr || xmlStr.trim() === '') throw new Error('Respuesta vacía');
+        let raw = await response.text();
 
-                const resultado = parsearRSS(xmlStr);
-                deferred.resolve(resultado);
-            } catch(e) {
-                // Este proxy respondió pero los datos son malos → siguiente
-                intentarProxies(proxyIndex + 1)
-                    .done(d => deferred.resolve(d))
-                    .fail(err => deferred.reject(err));
+        // Algunos proxies devuelven JSON con .contents
+        try {
+            const json = JSON.parse(raw);
+            if (json && typeof json.contents === 'string') {
+                raw = json.contents;
             }
-        })
-        .fail(function() {
-            // Este proxy falló → siguiente
-            intentarProxies(proxyIndex + 1)
-                .done(d => deferred.resolve(d))
-                .fail(err => deferred.reject(err));
-        });
+        } catch(e) {
+            // No es JSON, usar raw directamente
+        }
 
-    return deferred.promise();
-}
+        if (!raw || raw.trim() === '') {
+            throw new Error('Respuesta vacía');
+        }
 
-function cargarFeed() {
-    setBtnState(true);
-    setStatus('loading', 'Consultando...');
-    $('#itemCounter').text('');
-    setLoadingMsg(0);
+        const resultado = parsearRSS(raw);
+        if (!resultado) {
+            throw new Error('Sin items en RSS');
+        }
 
-    intentarProxies(0)
-        .done(function(resultado) {
-            if (!resultado) {
-                setStatus('ok', 'Sin reportes');
-                $('#feedBody').html('<div class="inline-alert warn">No hay reportes nuevos en el foro.</div>');
-                return;
-            }
-            $('#feedBody').html(resultado.html);
-            setStatus('ok', 'Activo');
-            $('#itemCounter').text(`${resultado.count} de ${resultado.total} reportes`);
-        })
-        .fail(function() {
-            setStatus('error', 'Sin conexión');
-            $('#feedBody').html(`<div class="inline-alert warn">
-                Todos los proxies fallaron (${PROXIES.length} intentos).<br>
-                Verifica tu conexión o intenta más tarde.
-            </div>`);
-        })
-        .always(function() {
-            setBtnState(false);
-            const now = new Date().toLocaleString('es-MX', {
-                hour: '2-digit', minute: '2-digit', second: '2-digit'
-            });
-            $('#lastUpdate').text('Última consulta: ' + now);
-        });
-}
+        return resultado;
 
-// Carga inicial
-$(document).ready(function() {
-    cargarFeed();
-});
-</script>
-</body>
-</html>
+    } catch (error) {
+        console.warn(
