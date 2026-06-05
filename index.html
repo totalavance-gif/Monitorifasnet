@@ -1,13 +1,12 @@
-<!DOCTYPE html>
+1<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Monitor de estabilidad para foro iFastNet - Sistema de monitoreo YODA">
+    <meta name="description" content="Monitor de estabilidad inteligente para foro iFastNet - Detecta caídas y resoluciones automáticamente">
     <meta name="theme-color" content="#0b0f1a">
     <title>Monitor de Estabilidad | YODA</title>
 
-    <!-- Favicon inline SVG para evitar peticiones externas -->
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%2300d4a8'/%3E%3Ctext x='50' y='65' font-size='50' text-anchor='middle' fill='%230b0f1a' font-family='Arial'%3EY%3C/text%3E%3C/svg%3E">
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -36,7 +35,6 @@
             padding: 2rem 1rem;
         }
 
-        /* Ruido de fondo sutil */
         body::before {
             content: '';
             position: fixed;
@@ -50,7 +48,7 @@
         .monitor-wrap {
             position: relative;
             z-index: 1;
-            max-width: 760px;
+            max-width: 800px;
             margin: 0 auto;
         }
 
@@ -107,6 +105,11 @@
             color: var(--yoda-accent);
         }
 
+        .status-pill.warn {
+            border-color: var(--yoda-warn);
+            color: var(--yoda-warn);
+        }
+
         .status-pill.error {
             border-color: var(--yoda-danger);
             color: var(--yoda-danger);
@@ -128,12 +131,49 @@
             50%       { opacity: .4; transform: scale(.7); }
         }
 
+        /* Alert banner */
+        .alert-banner {
+            padding: 0.85rem 1.25rem;
+            border-radius: var(--radius);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideDown 0.3s ease;
+        }
+
+        .alert-banner.critical {
+            background: rgba(232, 64, 64, 0.12);
+            border: 1px solid var(--yoda-danger);
+            color: var(--yoda-danger);
+        }
+
+        .alert-banner.resolved {
+            background: rgba(0, 212, 168, 0.12);
+            border: 1px solid var(--yoda-accent);
+            color: var(--yoda-accent);
+        }
+
+        .alert-banner.info {
+            background: rgba(0, 119, 255, 0.08);
+            border: 1px solid var(--yoda-accent2);
+            color: var(--yoda-accent2);
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
         /* Card principal */
         .monitor-card {
             background: var(--yoda-surface);
             border: 1px solid var(--yoda-border);
             border-radius: var(--radius);
             overflow: hidden;
+            margin-bottom: 1rem;
         }
 
         .monitor-card-header {
@@ -143,6 +183,7 @@
             padding: 0.85rem 1.25rem;
             border-bottom: 1px solid var(--yoda-border);
             gap: 1rem;
+            flex-wrap: wrap;
         }
 
         .source-label {
@@ -153,6 +194,12 @@
 
         .source-label strong {
             color: var(--yoda-text);
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
         }
 
         /* Botón refresh */
@@ -193,6 +240,33 @@
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        /* Toggle sonido */
+        .btn-toggle {
+            background: none;
+            border: 1px solid var(--yoda-border);
+            color: var(--yoda-muted);
+            border-radius: 6px;
+            padding: 5px 10px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all .2s;
+        }
+
+        .btn-toggle:hover {
+            border-color: var(--yoda-accent);
+            color: var(--yoda-accent);
+        }
+
+        .btn-toggle.active {
+            border-color: var(--yoda-accent);
+            color: var(--yoda-accent);
+            background: rgba(0, 212, 168, 0.08);
+        }
+
         /* Estado vacío / cargando */
         .state-box {
             padding: 2.5rem 1.5rem;
@@ -229,11 +303,16 @@
             align-items: start;
             transition: background .15s;
             animation: slideIn .3s ease both;
+            position: relative;
         }
 
         .feed-item:last-child { border-bottom: none; }
 
         .feed-item:hover { background: rgba(255,255,255,.025); }
+
+        .feed-item.critical { border-left: 3px solid var(--yoda-danger); padding-left: calc(1.25rem - 3px); }
+        .feed-item.resolved { border-left: 3px solid var(--yoda-accent); padding-left: calc(1.25rem - 3px); }
+        .feed-item.warning  { border-left: 3px solid var(--yoda-warn);  padding-left: calc(1.25rem - 3px); }
 
         @keyframes slideIn {
             from { opacity: 0; transform: translateY(6px); }
@@ -259,6 +338,21 @@
             font-size: 0.68rem;
             color: var(--yoda-muted);
         }
+
+        .feed-badge {
+            display: inline-block;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .feed-badge.critical { background: rgba(232, 64, 64, 0.15); color: var(--yoda-danger); }
+        .feed-badge.resolved { background: rgba(0, 212, 168, 0.15); color: var(--yoda-accent); }
+        .feed-badge.warning  { background: rgba(245, 166, 35, 0.15); color: var(--yoda-warn); }
 
         .btn-ver {
             display: inline-flex;
@@ -311,6 +405,7 @@
             align-items: center;
             justify-content: space-between;
             gap: 1rem;
+            flex-wrap: wrap;
         }
 
         .last-update {
@@ -325,6 +420,98 @@
             color: var(--yoda-muted);
         }
 
+        .next-check {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            color: var(--yoda-muted);
+        }
+
+        /* Historial */
+        .history-section {
+            margin-top: 1.5rem;
+        }
+
+        .history-title {
+            font-size: 0.75rem;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--yoda-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.75rem;
+        }
+
+        .history-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .history-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 0.5rem 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            border-bottom: 1px solid var(--yoda-border);
+            color: var(--yoda-text);
+        }
+
+        .history-item:last-child { border-bottom: none; }
+
+        .history-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .history-dot.critical { background: var(--yoda-danger); }
+        .history-dot.resolved { background: var(--yoda-accent); }
+        .history-dot.warning  { background: var(--yoda-warn); }
+
+        .history-time {
+            color: var(--yoda-muted);
+            white-space: nowrap;
+        }
+
+        /* Config */
+        .config-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.5rem 1.25rem;
+            border-bottom: 1px solid var(--yoda-border);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+        }
+
+        .config-row label {
+            color: var(--yoda-muted);
+            min-width: 140px;
+        }
+
+        .config-row input[type="number"] {
+            background: var(--yoda-bg);
+            border: 1px solid var(--yoda-border);
+            color: var(--yoda-text);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            width: 80px;
+        }
+
+        .config-row input[type="text"] {
+            background: var(--yoda-bg);
+            border: 1px solid var(--yoda-border);
+            color: var(--yoda-text);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            flex: 1;
+        }
+
         /* Responsive */
         @media (max-width: 576px) {
             body { padding: 1rem 0.75rem; }
@@ -332,9 +519,10 @@
             .monitor-header { flex-direction: column; align-items: flex-start; }
             .feed-item { grid-template-columns: 1fr; gap: 0.75rem; }
             .btn-ver { align-self: flex-start; }
+            .monitor-card-header { flex-direction: column; align-items: flex-start; }
+            .controls { width: 100%; justify-content: space-between; }
         }
 
-        /* Reduced motion */
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
                 animation-duration: 0.01ms !important;
@@ -343,7 +531,6 @@
             }
         }
 
-        /* Skip link for accessibility */
         .skip-link {
             position: absolute;
             top: -40px;
@@ -369,7 +556,7 @@
     <!-- Encabezado -->
     <div class="monitor-header">
         <div>
-            <div class="monitor-title">// sistema de monitoreo</div>
+            <div class="monitor-title">// sistema de monitoreo inteligente</div>
             <h1 class="monitor-heading">Foro <span>iFastNet</span></h1>
         </div>
         <div id="statusPill" class="status-pill loading" role="status" aria-live="polite" aria-atomic="true">
@@ -378,6 +565,9 @@
         </div>
     </div>
 
+    <!-- Banner de alerta dinámico -->
+    <div id="alertBanner" style="display:none;"></div>
+
     <!-- Card principal -->
     <div class="monitor-card" role="region" aria-label="Feed de reportes">
 
@@ -385,13 +575,18 @@
             <div class="source-label">
                 fuente: <strong>forum.infinityfree.com/posts.rss</strong>
             </div>
-            <button class="btn-refresh" id="btnRefresh" aria-label="Recargar feed">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M23 4v6h-6M1 20v-6h6"/>
-                    <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
-                </svg>
-                Recargar
-            </button>
+            <div class="controls">
+                <button class="btn-toggle" id="btnSound" aria-label="Activar/desactivar sonido" title="Sonido de alertas">
+                    🔇 Silencio
+                </button>
+                <button class="btn-refresh" id="btnRefresh" aria-label="Recargar feed">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M23 4v6h-6M1 20v-6h6"/>
+                        <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                    </svg>
+                    Recargar
+                </button>
+            </div>
         </div>
 
         <div id="feedBody" role="feed" aria-busy="true" aria-label="Lista de reportes">
@@ -404,237 +599,25 @@
         <div class="monitor-card-footer">
             <span class="last-update" id="lastUpdate">—</span>
             <span class="counter-label" id="itemCounter" aria-live="polite"></span>
+            <span class="next-check" id="nextCheck"></span>
         </div>
-
     </div>
-</div>
 
-<script>
-// ============================================
-// CONFIGURACIÓN
-// ============================================
-const CONFIG = {
-    RSS_URL:   "https://forum.infinityfree.com/posts.rss",
-    MAX_ITEMS: 5,
-    TIMEOUT:   12000,
-    RETRY_DELAY: 1000
-};
-
-// Proxies en orden de preferencia
-const PROXIES = [
-    url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-];
-
-// ============================================
-// UTILIDADES
-// ============================================
-
-/**
- * Sanitiza un string para inserción segura como texto visible
- * @param {string} str - Texto a sanitizar
- * @returns {string} Texto escapado
- */
-function sanitize(str) {
-    if (!str) return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
-}
-
-/**
- * Formatea una fecha a formato legible en español
- * @param {string} dateStr - Fecha ISO o similar
- * @returns {string} Fecha formateada
- */
-function formatDate(dateStr) {
-    if (!dateStr) return '';
-    try {
-        const date = new Date(dateStr);
-        if (isNaN(date.getTime())) return dateStr;
-        return date.toLocaleString('es-MX', {
-            day: '2-digit', month: 'short', year: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-        });
-    } catch(e) { 
-        return dateStr; 
-    }
-}
-
-/**
- * Establece el estado del indicador superior
- * @param {string} state - 'loading' | 'ok' | 'error'
- * @param {string} label - Texto descriptivo
- */
-function setStatus(state, label) {
-    const pill = document.getElementById('statusPill');
-    const dot  = pill.querySelector('.status-dot');
-    const text = document.getElementById('statusText');
-
-    pill.className = `status-pill ${state}`;
-    dot.classList.toggle('pulse', state === 'loading');
-    text.textContent = label;
-}
-
-/**
- * Activa/desactiva el botón de refresh
- * @param {boolean} loading - Estado de carga
- */
-function setBtnState(loading) {
-    const btn = document.getElementById('btnRefresh');
-    btn.disabled = loading;
-    btn.classList.toggle('spinning', loading);
-    btn.setAttribute('aria-busy', loading ? 'true' : 'false');
-}
-
-/**
- * Muestra mensaje de carga con proxy actual
- * @param {number} index - Índice del proxy
- */
-function setLoadingMsg(index) {
-    const feedBody = document.getElementById('feedBody');
-    feedBody.innerHTML = `
-        <div class="state-box">
-            <div class="spinner-mono" aria-hidden="true"></div><br>
-            Intentando proxy ${index + 1} de ${PROXIES.length}...
-        </div>`;
-    feedBody.setAttribute('aria-busy', 'true');
-}
-
-// ============================================
-// PARSEO RSS
-// ============================================
-
-/**
- * Parsea XML RSS y genera HTML de la lista
- * @param {string} xmlStr - String XML del RSS
- * @returns {Object|null} { html, count, total } o null si no hay items
- */
-function parsearRSS(xmlStr) {
-    const parser = new DOMParser();
-    const xmlDoc = parser.parseFromString(xmlStr, "text/xml");
-
-    // Verificar errores de parseo
-    const parseError = xmlDoc.querySelector("parsererror");
-    if (parseError) {
-        console.warn("Error parseando XML:", parseError.textContent);
-        return null;
-    }
-
-    const items = xmlDoc.querySelectorAll('item');
-    if (items.length === 0) return null;
-
-    let html  = '<ul class="feed-list">';
-    let count = 0;
-
-    items.forEach((item, idx) => {
-        if (idx >= CONFIG.MAX_ITEMS) return;
-
-        const titulo = item.querySelector('title')?.textContent?.trim() || 'Sin título';
-
-        // Extraer link: RSS 2.0 usa nodo de texto adyacente
-        let link = '';
-        const linkNode = item.querySelector('link');
-        if (linkNode) {
-            // Intentar href (Atom)
-            link = linkNode.getAttribute('href') || '';
-            // Intentar texto del nodo
-            if (!link) link = linkNode.textContent?.trim() || '';
-            // Intentar nextSibling (RSS 2.0)
-            if (!link && linkNode.nextSibling?.nodeType === 3) {
-                link = linkNode.nextSibling.nodeValue?.trim() || '';
-            }
-        }
-
-        const fecha = item.querySelector('pubDate')?.textContent || '';
-        const safe_t = sanitize(titulo);
-        const safe_l = sanitize(link);
-
-        html += `
-        <li class="feed-item">
-            <div>
-                <div class="feed-title">${safe_t}</div>
-                <div class="feed-date">${formatDate(fecha)}</div>
-            </div>
-            ${safe_l ? `<a href="${safe_l}" target="_blank" rel="noopener noreferrer" class="btn-ver">
-                Ver
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-                    <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
-                    <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-                </svg>
-            </a>` : ''}
-        </li>`;
-        count++;
-    });
-
-    html += '</ul>';
-    return { html, count, total: items.length };
-}
-
-// ============================================
-// FETCH CON PROXIES (Vanilla JS)
-// ============================================
-
-/**
- * Realiza fetch con timeout
- * @param {string} url - URL a fetch
- * @param {number} timeout - Tiempo máximo en ms
- * @returns {Promise<Response>}
- */
-function fetchWithTimeout(url, timeout = CONFIG.TIMEOUT) {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-
-    return fetch(url, { signal: controller.signal })
-        .finally(() => clearTimeout(id));
-}
-
-/**
- * Intenta cada proxy en secuencia
- * @param {number} proxyIndex - Índice del proxy a intentar
- * @returns {Promise<Object>} Resultado del parseo
- */
-async function intentarProxies(proxyIndex = 0) {
-    if (proxyIndex >= PROXIES.length) {
-        throw new Error('all_failed');
-    }
-
-    setLoadingMsg(proxyIndex);
-    setStatus('loading', `Proxy ${proxyIndex + 1}/${PROXIES.length}...`);
-
-    const rssConCache = CONFIG.RSS_URL + '?_=' + Date.now();
-    const proxyUrl = PROXIES[proxyIndex](rssConCache);
-
-    try {
-        const response = await fetchWithTimeout(proxyUrl);
-
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        let raw = await response.text();
-
-        // Algunos proxies devuelven JSON con .contents
-        try {
-            const json = JSON.parse(raw);
-            if (json && typeof json.contents === 'string') {
-                raw = json.contents;
-            }
-        } catch(e) {
-            // No es JSON, usar raw directamente
-        }
-
-        if (!raw || raw.trim() === '') {
-            throw new Error('Respuesta vacía');
-        }
-
-        const resultado = parsearRSS(raw);
-        if (!resultado) {
-            throw new Error('Sin items en RSS');
-        }
-
-        return resultado;
-
-    } catch (error) {
-        console.warn(
+    <!-- Configuración -->
+    <div class="monitor-card">
+        <div class="monitor-card-header">
+            <div class="source-label"><strong>⚙️ Configuración</strong></div>
+        </div>
+        <div class="config-row">
+            <label for="intervalInput">Intervalo (seg):</label>
+            <input type="number" id="intervalInput" value="60" min="10" max="3600">
+        </div>
+        <div class="config-row">
+            <label for="keywordsDown">Palabras caída:</label>
+            <input type="text" id="keywordsDown" value="down,not working,offline,error,500,502,503,404,stuck,broken,fail,can't access,unable,problem,issue">
+        </div>
+        <div class="config-row">
+            <label for="keywordsUp">Palabras resuelto:</label>
+            <input type="text" id="keywordsUp" value="fixed,resolved,working,back,online,restored,solved,ok,fine,stable,up and running,recovered">
+                </div>
+                
